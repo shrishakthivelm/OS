@@ -1,0 +1,653 @@
+//READER WRITER
+
+#include<semaphore.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<unistd.h>
+#include<pthread.h>
+sem_t x,y;
+pthread_t tid;
+pthread_t writerthreads[100],readerthreads[100];
+int readercount = 0;
+
+void *reader(void* param) 
+{
+    sem_wait(&x);
+    readercount++;
+    if(readercount==1)
+        sem_wait(&y);
+    sem_post(&x);
+    printf("%d reader is inside\n",readercount);
+    usleep(3);
+    sem_wait(&x);
+    readercount--;
+    if(readercount==0)
+    {
+        sem_post(&y);
+    }
+    sem_post(&x);
+    printf("%d Reader is leaving\n",readercount+1);
+    return NULL;
+}
+
+void *writer(void* param)
+{
+    printf("Writer is trying to enter\n");
+    sem_wait(&y);
+    printf("Writer has entered\n");
+    sem_post(&y);
+    printf("Writer is leaving\n");
+    return NULL;
+}
+
+int main()
+{
+    int n2,i;
+    printf("Enter the number of readers:");
+    scanf("%d",&n2);
+    printf("\n");
+    int n1[n2];
+    sem_init(&x,0,1);
+    sem_init(&y,0,1);
+    for(i=0;i<n2;i++)
+    {
+        pthread_create(&writerthreads[i],NULL,reader,NULL);
+        pthread_create(&readerthreads[i],NULL,writer,NULL);
+    }
+    for(i=0;i<n2;i++)
+    {
+        pthread_join(writerthreads[i],NULL);
+        pthread_join(readerthreads[i],NULL);
+    }
+
+}
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//producer consumer
+#include<stdio.h>
+#include<semaphore.h>
+#include<pthread.h>
+#include<stdlib.h>
+
+#define buffersize 10
+pthread_mutex_t mutex;
+pthread_t tidP[20],tidC[20];
+
+sem_t full,empty;
+
+int counter;
+int buffer[buffersize];
+
+void initialize()
+{
+        pthread_mutex_init(&mutex,NULL);
+        sem_init(&full,1,0);
+        sem_init(&empty,1,buffersize);
+        counter=0;
+}
+
+void write(int item)
+{
+        buffer[counter++]=item;
+}
+
+int read()
+{
+        return(buffer[--counter]);
+}
+
+void * producer (void * param)
+{
+        int waittime,item,i;
+   while(1) {
+        
+        item=rand()%5;
+        waittime=rand()%5;
+        sleep(waittime);
+        sem_wait(&empty);
+        pthread_mutex_lock(&mutex);
+        printf("\nProducer has produced item: %d\n",item);
+        write(item);
+        pthread_mutex_unlock(&mutex);
+        sem_post(&full);
+  }
+}
+
+void * consumer (void * param)
+{
+        int waittime,item;
+  while(1) {
+        waittime=rand()%5;
+      
+        sem_wait(&full);
+        pthread_mutex_lock(&mutex);
+        item=read();
+        printf("\nConsumer has consumed item: %d\n",item);
+        pthread_mutex_unlock(&mutex);
+        sem_post(&empty);
+   }
+}
+
+int main()
+{
+        int n1,n2,i;
+        initialize();
+        printf("\nEnter the no of producers: ");
+        scanf("%d",&n1);
+        printf("\nEnter the no of consumers: ");
+        scanf("%d",&n2);
+        for(i=0;i<n1;i++)
+                pthread_create(&tidP[i],NULL,producer,NULL);
+        for(i=0;i<n2;i++)
+                pthread_create(&tidC[i],NULL,consumer,NULL);
+        for(i=0;i<n1;i++)
+                pthread_join(tidP[i],NULL);
+        for(i=0;i<n2;i++)
+                pthread_join(tidC[i],NULL);
+
+        //sleep(5);
+        exit(0);
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+dining philosopher
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <unistd.h>
+
+#define NUM_PHILOSOPHERS 5
+
+pthread_mutex_t chopsticks[NUM_PHILOSOPHERS];
+
+void *philosopher(void *arg) {
+    int id = *((int *) arg);
+    int left = id;
+    int right = (id + 1) % NUM_PHILOSOPHERS;
+
+    while (1) {
+        // Try to pick up left chopstick
+        pthread_mutex_lock(&chopsticks[left]);
+        printf("Philosopher %d picks up left chopstick %d\n", id, left);
+
+        // Try to pick up right chopstick
+        pthread_mutex_lock(&chopsticks[right]);
+        printf("Philosopher %d picks up right chopstick %d\n", id, right);
+
+        // Eat
+        printf("Philosopher %d is eating\n", id);
+        usleep(1000000); // Simulate eating time
+
+        // Release chopsticks
+        pthread_mutex_unlock(&chopsticks[right]);
+        printf("Philosopher %d puts down right chopstick %d\n", id, right);
+        pthread_mutex_unlock(&chopsticks[left]);
+        printf("Philosopher %d puts down left chopstick %d\n", id, left);
+
+        // Think
+        printf("Philosopher %d is thinking\n", id);
+        usleep(1000000); // Simulate thinking time
+    }
+}
+
+int main() {
+    pthread_t philosophers[NUM_PHILOSOPHERS];
+    int ids[NUM_PHILOSOPHERS];
+
+    // Initialize mutexes
+    for (int i = 0; i < NUM_PHILOSOPHERS; ++i) {
+        pthread_mutex_init(&chopsticks[i], NULL);
+    }
+
+    // Create philosopher threads
+    for (int i = 0; i < NUM_PHILOSOPHERS; ++i) {
+        ids[i] = i;
+        pthread_create(&philosophers[i], NULL, philosopher, &ids[i]);
+    }
+
+    // Join threads
+    for (int i = 0; i < NUM_PHILOSOPHERS; ++i) {
+        pthread_join(philosophers[i], NULL);
+    }
+
+    // Destroy mutexes
+    for (int i = 0; i < NUM_PHILOSOPHERS; ++i) {
+        pthread_mutex_destroy(&chopsticks[i]);
+    }
+
+    return 0;
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+PIZZA PROB
+
+#include<stdio.h>
+#include<pthread.h>
+#include<semaphore.h>
+#include<unistd.h>
+#define S 3
+#define NUM_STUDENTS 8
+sem_t pizza;
+sem_t deliver;
+int num_slices=0;
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+void study(void *arg)
+{
+    long student_id=(long)arg;
+    printf("student %ld has taken a slice and is studying.\n",student_id);
+    sleep(1);
+}
+void *student(void *arg)
+{
+    while(1)
+    {
+        sem_wait(&pizza);
+        pthread_mutex_lock(&mutex);
+        num_slices--;
+        if(num_slices==0)
+        {
+            sem_post(&deliver);
+        }
+        study(arg);
+        pthread_mutex_unlock(&mutex);
+    }
+}
+void make_pizza()
+{
+    printf("delivery thread is making pizza.\n");
+    sleep(2);
+}
+void *delivery_thread(void *arg)
+{
+    while(1)
+    {
+        sem_wait(&deliver);
+        make_pizza();
+        pthread_mutex_lock(&mutex);
+        num_slices=S;
+        pthread_mutex_unlock(&mutex);
+        printf("delivery pizza\n");
+        for(int i=0;i<S;i++)
+        {
+            sem_post(&pizza);
+        }
+    }
+}
+int main()
+{
+    sem_init(&pizza,0,0);
+    sem_init(&deliver,0,1);
+    pthread_t student_tids[NUM_STUDENTS];
+    pthread_t delivery_tid;
+    for(int i=0;i<NUM_STUDENTS;i++)
+    {
+        if(pthread_create(&student_tids[i],NULL,student,(void *)i)!=0)
+        {
+            perror("pthread create");
+            return 1;
+        }
+    }
+    if(pthread_create(&delivery_tid,NULL,delivery_thread,NULL)!=0)
+    {
+        perror("pthread create");
+        return 1;
+    }
+    for(int i=0;i<NUM_STUDENTS;i++)
+    {
+        if(pthread_join(student_tids[i],NULL)!=0)
+        {
+            perror("pthread_join");
+            return 1;
+        }
+    }
+}
+
+````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````
+BABOON
+
+#include <stdio.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <unistd.h>
+
+#define MAX_CAPACITY 5
+
+sem_t rope_mutex, left_mutex, right_mutex;
+int left_count = 0, right_count = 0;
+
+struct BaboonInfo {
+    int baboon_num;
+    int arrival_time;
+};
+
+void* cross_rope(void* arg) {
+    struct BaboonInfo* baboon_info = (struct BaboonInfo*)arg;
+    int baboon_num = baboon_info->baboon_num;
+    int arrival_time = baboon_info->arrival_time;
+    int side = (baboon_num % 2 == 0) ? 0 : 1; // Determine side based on baboon number
+    
+    printf("Baboon %d arrived at time %d and is initially on the %s side.\n", baboon_num, arrival_time, (side == 0 ? "left" : "right"));
+    
+    if (side == 0) {
+        sem_wait(&left_mutex);
+        if (++left_count == 1)
+            sem_wait(&rope_mutex);
+        sem_post(&left_mutex);
+    } else {
+        sem_wait(&right_mutex);
+        if (++right_count == 1)
+            sem_wait(&rope_mutex);
+        sem_post(&right_mutex);
+    }
+    
+    printf("Baboon %d is crossing from %s to %s\n", baboon_num, (side == 0 ? "left" : "right"), (side == 0 ? "right" : "left"));
+    
+    sleep(1); // Simulating crossing time
+    
+    if (side == 0) {
+        sem_wait(&left_mutex);
+        if (--left_count == 0)
+            sem_post(&rope_mutex);
+        sem_post(&left_mutex);
+    } else {
+        sem_wait(&right_mutex);
+        if (--right_count == 0)
+            sem_post(&rope_mutex);
+        sem_post(&right_mutex);
+    }
+    
+    printf("Baboon %d has crossed.\n", baboon_num);
+    
+    return NULL;
+}
+
+int main() {
+    pthread_t threads[10]; // Assume 10 baboons
+    struct BaboonInfo baboon_infos[10] = {
+        {1, 0}, {2, 1}, {3, 2}, {4, 3}, {5, 4}, {6, 5}, {7, 6}, {8, 7}, {9, 8}, {10, 9}
+    }; // Baboon numbers and arrival times
+    
+    sem_init(&rope_mutex, 0, 1);
+    sem_init(&left_mutex, 0, 1);
+    sem_init(&right_mutex, 0, 1);
+    
+    for (int i = 0; i < 10; i++) {
+        pthread_create(&threads[i], NULL, cross_rope, &baboon_infos[i]);
+    }
+    
+    for (int i = 0; i < 10; i++) {
+        pthread_join(threads[i], NULL);
+    }
+    
+    sem_destroy(&rope_mutex);
+    sem_destroy(&left_mutex);
+    sem_destroy(&right_mutex);
+    
+    return 0;
+}
+````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````
+RESTAURANT DINER
+
+#include<stdio.h>
+
+#include<stdlib.h>
+
+#include<pthread.h>
+
+#include<semaphore.h>
+
+
+
+#define MAX 6
+
+#define N 3
+
+
+
+sem_t entering_diner,enter_done,exiting_diner,exit_done;
+
+sem_t mutex_enter,mutex_exit;
+
+int count_enter = 0;
+
+int count_exit = 0;
+
+int c = 0;
+
+
+
+void* diner_thread(void* args){
+
+
+
+        sem_wait(&entering_diner);      /* Waits for the Front Door to open*/
+
+        printf("Entering Diners \n");
+
+        sem_wait(&mutex_enter);
+
+        count_enter++;
+
+        c++;
+
+        printf("Count Enter : %d\n",count_enter);
+
+        if(count_enter != N)
+
+                sem_post(&entering_diner);
+
+        else
+
+                sem_post(&enter_done);
+
+        sem_post(&mutex_enter);
+
+
+
+        sem_wait(&exiting_diner);
+
+        printf("\nEat\n");
+
+        sem_post(&exiting_diner);
+
+
+
+        sem_wait(&mutex_exit);
+
+        //printf("Count : %d %d\n",count_exit,count_exit==N);
+
+        count_exit++;
+
+        if((count_exit) == N)
+
+                sem_post(&exit_done);
+
+        sem_post(&mutex_exit);
+
+}
+
+
+
+void* restaurant_thread(void* args){
+
+
+
+        while(1){
+
+
+
+                printf("Front Door Opened!\n");
+
+                sem_post(&entering_diner);
+
+                if (c==MAX){
+
+                        printf("Front Door Closed\n");
+
+                        /*sem_post(&enter_done);
+
+                        sem_post(&exiting_diner);
+
+                        sem_post(&exit_done);
+
+                        */break;
+
+                }
+
+                sem_wait(&enter_done);
+
+                printf("Front Door Closed\n");
+
+
+
+
+
+
+
+                printf("Serving Food\n");
+
+                printf("Back Door Opened!\n");
+
+                sem_post(&exiting_diner);
+
+
+
+                sem_wait(&exit_done);
+
+                sem_wait(&exiting_diner);
+
+                sem_wait(&mutex_exit);
+
+                printf("Count Exit : %d\n",count_enter);
+
+                sem_post(&mutex_exit);
+
+                printf("\nBack Door Closed!\n");
+
+
+
+                sem_wait(&mutex_exit);
+
+                count_exit = 0;
+
+                printf("Setting Count_Exit to %d\n",count_exit);
+
+                sem_post(&mutex_exit);
+
+
+
+                sem_wait(&mutex_enter);
+
+                count_enter = 0;
+
+                printf("Setting Count_Enter to %d\n",count_exit);
+
+                sem_post(&mutex_enter);
+
+        }
+
+}
+
+
+
+
+
+int main(){
+
+
+
+        sem_init(&entering_diner,0,0);
+
+        sem_init(&enter_done,0,0);
+
+        sem_init(&exiting_diner,0,0);
+
+        sem_init(&exit_done,0,0);
+
+
+
+        sem_init(&mutex_enter,0,1);
+
+        sem_init(&mutex_exit,0,1);
+
+
+
+        pthread_t diners[MAX];
+
+        pthread_t restaurant;
+
+
+
+        for(int i=0;i<MAX;i++)
+
+                pthread_create(&diners[i],NULL,diner_thread,NULL);
+
+
+
+        pthread_create(&restaurant,NULL,restaurant_thread,NULL);
+
+
+
+        for(int i=0;i<MAX;i++)
+
+                pthread_join(diners[i],NULL);
+
+        pthread_join(restaurant,NULL);
+
+
+
+}
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+format for shell script
+#!/bin/bash
+
+display_memory_info() {
+        total_memory_gb=$(free | awk 'NR==2 {print $2/1024/1024}')
+        used_memory_mb=$(free | awk 'NR==2 {print $3/1024}')
+        available_memory_gb=$(free -h | awk 'NR==2 {gsub("Gi", "", $7); print $7}')
+        echo "Total Memory: $total_memory_gb GB"
+        echo "Used Memory: $used_memory_mb MB"
+        echo "Available Memory: $available_memory_gb GB"
+
+}
+
+display_disk_info() {
+        df -h | awk '$1 == "drivers" {print "Filesystem:", $1, "Size:", $2, "Used:", $3, "Avail:", $4, "Use%:", $5}'
+}
+cpu_processes() {
+    echo "Top CPU-Intensive Processes:"
+    top -b -n 1 | head -n 15
+}
+network_info() {
+    echo "Network Activity:"
+    nload
+}
+cache_memory() {
+        CACHE_MEMORY_KB=$(free -m | awk 'NR==2{print $6}')
+        AVAILABLE_CACHE_MEMORY_KB=$(free -m | awk 'NR==2{print $7}')
+
+        echo "Cache Memory used: ${CACHE_MEMORY_KB} MB"
+        echo "Available Cache Memory: ${AVAILABLE_CACHE_MEMORY_KB} MB"
+}
+while true; do
+    echo "Menu:"
+    echo "1. Display Memory Information"
+    echo "2. Display Disk Information"
+    echo "3. Display network activity:"
+    echo "4. Display CPU Processes:"
+    echo "5. Display cache memory:"
+    echo "6. Exit"
+    read -p "Enter your choice (1/2/3/4/5/6): " choice
+
+    case "$choice" in
+        1) display_memory_info ;;
+        2) display_disk_info ;;
+        3) network_info ;;
+        4) cpu_processes ;;
+        5) cache_memory ;;
+        6) echo "Exiting. Goodbye!" && exit ;;
+        *) echo "Invalid choice. Please select 1, 2, or 3." ;;
+    esac
+done
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
