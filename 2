@@ -1,0 +1,56 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <ctype.h> // for toupper and tolower
+
+#define BUFFER_SIZE 1024
+
+// Shared resources
+char buffer[BUFFER_SIZE];
+sem_t input_sem, output_sem;
+
+// Thread 1: Read input from user and write to pipe
+void* read_input(void* arg) {
+    printf("Enter input: ");
+    fgets(buffer, BUFFER_SIZE, stdin);
+    sem_post(&input_sem); // Signal that input is ready
+    pthread_exit(NULL);
+}
+
+// Thread 2: Translate uppercase to lowercase
+void* translate_case(void* arg) {
+    sem_wait(&input_sem); // Wait for input
+    for (int i = 0; buffer[i] != '\0'; ++i) {
+        if (isupper(buffer[i])) {
+            buffer[i] = tolower(buffer[i]);
+        }
+    }
+    sem_post(&output_sem); // Signal that translation is done
+    pthread_exit(NULL);
+}
+
+int main() {
+    pthread_t input_thread, translation_thread;
+
+    // Initialize semaphores
+    sem_init(&input_sem, 0, 0);
+    sem_init(&output_sem, 0, 0);
+
+    // Create threads
+    pthread_create(&input_thread, NULL, read_input, NULL);
+    pthread_create(&translation_thread, NULL, translate_case, NULL);
+
+    // Wait for threads to complete
+    pthread_join(input_thread, NULL);
+    pthread_join(translation_thread, NULL);
+
+    // Print translated output
+    printf("Translated output: %s\n", buffer);
+
+    // Clean up
+    sem_destroy(&input_sem);
+    sem_destroy(&output_sem);
+
+    return 0;
+}
